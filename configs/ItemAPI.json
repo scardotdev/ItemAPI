@@ -1,0 +1,8 @@
+{
+  "EndpointUrl": "https://rusthelp.com/downloads/admin-item-list-public.json",
+  "RefreshIntervalMinutes": 1440,
+  "StartupFetchDelaySeconds": 5,
+  "RequestTimeoutSeconds": 10,
+  "UseDiskCache": true,
+  "DiskCacheFileName": "ItemAPI.cache"
+}
