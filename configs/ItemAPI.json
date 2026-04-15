@@ -1,5 +1,7 @@
 {
-  "EndpointUrl": "https://rusthelp.com/downloads/admin-item-list-public.json",
+  "PrimaryEndpointUrl": "https://rusthelp.com/downloads/admin-item-list-public.json",
+  "SecondaryEndpointUrl": "https://api.carbonmod.gg/meta/rust/items.json",
+  "EnableSecondarySource": true,
   "RefreshIntervalMinutes": 1440,
   "StartupFetchDelaySeconds": 5,
   "RequestTimeoutSeconds": 10,

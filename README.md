@@ -6,13 +6,13 @@ Framework target: **Oxide/uMod and Carbon-compatible Rust server plugins**
 
 ## Overview
 
-`ItemAPI` downloads RustHelp's public admin item list JSON, validates/parses it, caches it in memory, optionally persists the raw payload to disk, and exposes item lookup/search methods that other plugins can call.
+`ItemAPI` downloads and merges Rust item list JSON from RustHelp and Carbon, validates/parses it, caches it in memory, optionally persists the merged payload to disk, and exposes item lookup/search methods that other plugins can call.
 
 In short, this plugin acts as a **shared item metadata service** for your server-side plugin ecosystem.
 
 ## What this plugin does
 
-- Fetches item data from a configurable JSON endpoint (`EndpointUrl`).
+- Fetches item data from a configurable primary endpoint (`PrimaryEndpointUrl`) and an optional secondary endpoint (`SecondaryEndpointUrl`).
 - Parses each item into a normalized internal model:
   - `shortName`
   - `id`
@@ -28,13 +28,14 @@ In short, this plugin acts as a **shared item metadata service** for your server
 - Exposes API methods other plugins can call (lookup, search, enumerate, refresh, status-style helpers).
 - Emits a cross-plugin hook whenever refresh succeeds or fails.
 
-## Data source
+## Data sources
 
-Default endpoint:
+Default endpoints:
 
-- `https://rusthelp.com/downloads/admin-item-list-public.json`
+- Primary (RustHelp): `https://rusthelp.com/downloads/admin-item-list-public.json`
+- Secondary (Carbon): `https://api.carbonmod.gg/meta/rust/items.json`
 
-You can override this via config.
+The secondary source is enabled by default and supplements missing data from the primary source.
 
 ## Plugin metadata
 
@@ -42,8 +43,8 @@ From `plugins/ItemAPI.cs`:
 
 - Name: `ItemAPI`
 - Author: `scar.dev`
-- Version: `1.1.1`
-- Description: ItemAPI downloads and caches RustHelp item list JSON and exposes it via a simple API for other plugins.
+- Version: `1.2.0`
+- Description: ItemAPI downloads and merges Rust item list JSON from RustHelp + Carbon and exposes it via a simple API for other plugins.
 
 ## Lifecycle behavior
 
@@ -61,7 +62,7 @@ When refresh is requested (startup / interval / manual / API):
 2. Avoids overlapping requests using an `_isFetching` gate.
 3. Sends HTTP GET with headers:
    - `Accept: application/json`
-   - `User-Agent: LoneWolfRust-ItemAPI/1.1.1`
+   - `User-Agent: LoneWolfRust-ItemAPI/1.2.0`
 4. Handles response:
    - requires HTTP 200 and non-empty payload
    - deserializes JSON into `List<ItemEntry>`
@@ -99,7 +100,9 @@ The plugin creates/uses a config object with these fields:
 
 ```json
 {
-  "EndpointUrl": "https://rusthelp.com/downloads/admin-item-list-public.json",
+  "PrimaryEndpointUrl": "https://rusthelp.com/downloads/admin-item-list-public.json",
+  "SecondaryEndpointUrl": "https://api.carbonmod.gg/meta/rust/items.json",
+  "EnableSecondarySource": true,
   "RefreshIntervalMinutes": 1440,
   "StartupFetchDelaySeconds": 5,
   "RequestTimeoutSeconds": 10,
@@ -110,9 +113,16 @@ The plugin creates/uses a config object with these fields:
 
 ### Config reference
 
-- `EndpointUrl` (`string`)
-  - Source URL for item JSON.
+- `PrimaryEndpointUrl` (`string`)
+  - Primary source URL for item JSON.
   - Must be non-empty or refresh will fail.
+
+- `SecondaryEndpointUrl` (`string`)
+  - Secondary source URL for item JSON.
+  - Used only when `EnableSecondarySource = true`.
+
+- `EnableSecondarySource` (`bool`)
+  - Enables/disables fetching and merging the secondary source.
 
 - `RefreshIntervalMinutes` (`int`)
   - Periodic auto-refresh cadence.
