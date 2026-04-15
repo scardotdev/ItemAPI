@@ -2,16 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("ItemAPI", "scar.dev", "1.1.1")]
-    [Description("ItemAPI downloads and caches RustHelp item list JSON and exposes it via a simple API for other plugins.")]
+    [Info("ItemAPI", "scar.dev", "1.2.0")]
+    [Description("ItemAPI downloads and merges Rust item list JSON from RustHelp + Carbon and exposes it via a simple API for other plugins.")]
     public class ItemAPI : RustPlugin
     {
-        private const string DefaultEndpoint = "https://rusthelp.com/downloads/admin-item-list-public.json";
+        private const string DefaultPrimaryEndpoint = "https://rusthelp.com/downloads/admin-item-list-public.json";
+        private const string DefaultSecondaryEndpoint = "https://api.carbonmod.gg/meta/rust/items.json";
         private const string CacheDataFileName = "ItemAPI.cache";
 
         private Configuration _config;
@@ -45,7 +47,11 @@ namespace Oxide.Plugins
 
         private class Configuration
         {
-            [JsonProperty("EndpointUrl")] public string EndpointUrl { get; set; } = DefaultEndpoint;
+            [JsonProperty("PrimaryEndpointUrl")] public string PrimaryEndpointUrl { get; set; } = DefaultPrimaryEndpoint;
+
+            [JsonProperty("SecondaryEndpointUrl")] public string SecondaryEndpointUrl { get; set; } = DefaultSecondaryEndpoint;
+
+            [JsonProperty("EnableSecondarySource")] public bool EnableSecondarySource { get; set; } = true;
 
             // Set to 0 to disable periodic refresh (manual refresh still works).
             [JsonProperty("RefreshIntervalMinutes")] public int RefreshIntervalMinutes { get; set; } = 1440; // 24h
@@ -190,10 +196,10 @@ namespace Oxide.Plugins
 
         private bool RefreshNow(string reason)
         {
-            string url = _config.EndpointUrl?.Trim();
-            if (string.IsNullOrEmpty(url))
+            string primaryUrl = _config.PrimaryEndpointUrl?.Trim();
+            if (string.IsNullOrEmpty(primaryUrl))
             {
-                SetError("EndpointUrl is empty.", reason, fireHook: true);
+                SetError("PrimaryEndpointUrl is empty.", reason, fireHook: true);
                 return false;
             }
 
@@ -203,53 +209,193 @@ namespace Oxide.Plugins
                 _isFetching = true;
             }
 
+            var endpoints = new List<EndpointRequest>
+            {
+                new EndpointRequest(primaryUrl, "rusthelp")
+            };
+
+            if (_config.EnableSecondarySource)
+            {
+                var secondaryUrl = _config.SecondaryEndpointUrl?.Trim();
+                if (!string.IsNullOrEmpty(secondaryUrl))
+                    endpoints.Add(new EndpointRequest(secondaryUrl, "carbon"));
+                else
+                    PrintWarning("ItemAPI: EnableSecondarySource is true but SecondaryEndpointUrl is empty; skipping secondary source.");
+            }
+
+            FetchEndpointChain(endpoints, reason);
+
+            return true;
+        }
+
+        private class EndpointRequest
+        {
+            public string Url { get; }
+            public string SourceName { get; }
+
+            public EndpointRequest(string url, string sourceName)
+            {
+                Url = url;
+                SourceName = sourceName;
+            }
+        }
+
+        private class FetchState
+        {
+            public readonly List<EndpointRequest> Endpoints;
+            public readonly string Reason;
+            public readonly List<ItemEntry> CombinedItems = new List<ItemEntry>();
+            public readonly List<string> Errors = new List<string>();
+            public int Index;
+
+            public FetchState(List<EndpointRequest> endpoints, string reason)
+            {
+                Endpoints = endpoints;
+                Reason = reason;
+            }
+        }
+
+        private void FetchEndpointChain(List<EndpointRequest> endpoints, string reason)
+        {
+            if (endpoints == null || endpoints.Count == 0)
+            {
+                SetError("No endpoints configured.", reason, fireHook: true);
+                lock (_sync) _isFetching = false;
+                return;
+            }
+
+            FetchNextEndpoint(new FetchState(endpoints, reason));
+        }
+
+        private void FetchNextEndpoint(FetchState state)
+        {
+            if (state.Index >= state.Endpoints.Count)
+            {
+                FinalizeFetch(state);
+                return;
+            }
+
+            var endpoint = state.Endpoints[state.Index++];
             var headers = new Dictionary<string, string>
             {
                 ["Accept"] = "application/json",
-                ["User-Agent"] = "LoneWolfRust-ItemAPI/1.1.1"
+                ["User-Agent"] = "LoneWolfRust-ItemAPI/1.2.0"
             };
 
             webrequest.Enqueue(
-                url,
+                endpoint.Url,
                 null,
-                (code, response) => OnFetchComplete(code, response, reason),
+                (code, response) =>
+                {
+                    if (code != 200 || string.IsNullOrWhiteSpace(response))
+                    {
+                        state.Errors.Add($"{endpoint.SourceName}: HTTP {(code == 0 ? "0 (no response)" : code.ToString())}");
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var parsed = ParseItemsFromJson(response);
+                            if (parsed.Count == 0)
+                                state.Errors.Add($"{endpoint.SourceName}: parsed item list was empty");
+                            else
+                                state.CombinedItems.AddRange(parsed);
+                        }
+                        catch (Exception ex)
+                        {
+                            state.Errors.Add($"{endpoint.SourceName}: JSON parse failed ({ex.Message})");
+                        }
+                    }
+
+                    FetchNextEndpoint(state);
+                },
                 this,
                 RequestMethod.GET,
                 headers,
                 _config.RequestTimeoutSeconds
             );
-
-            return true;
         }
 
-        private void OnFetchComplete(int code, string response, string reason)
+        private List<ItemEntry> ParseItemsFromJson(string rawJson)
+        {
+            var array = JArray.Parse(rawJson);
+            var items = new List<ItemEntry>(array.Count);
+
+            foreach (var token in array)
+            {
+                var obj = token as JObject;
+                if (obj == null) continue;
+
+                var shortName = ReadString(obj, "shortName", "ShortName");
+                var displayName = ReadString(obj, "displayName", "DisplayName");
+                var description = ReadString(obj, "description", "Description");
+                var iconUrl = ReadString(obj, "iconUrl", "IconUrl");
+
+                int id;
+                if (!TryReadInt(obj, out id, "id", "Id"))
+                    continue;
+
+                items.Add(new ItemEntry
+                {
+                    ShortName = shortName,
+                    Id = id,
+                    DisplayName = displayName,
+                    Description = description,
+                    IconUrl = iconUrl
+                });
+            }
+
+            return items;
+        }
+
+        private string ReadString(JObject obj, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                var token = obj[key];
+                if (token == null || token.Type == JTokenType.Null) continue;
+                return token.Type == JTokenType.String ? token.Value<string>() : token.ToString();
+            }
+
+            return null;
+        }
+
+        private bool TryReadInt(JObject obj, out int value, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                var token = obj[key];
+                if (token == null || token.Type == JTokenType.Null) continue;
+
+                if (token.Type == JTokenType.Integer)
+                {
+                    value = token.Value<int>();
+                    return true;
+                }
+
+                if (int.TryParse(token.ToString(), out value))
+                    return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        private void FinalizeFetch(FetchState state)
         {
             try
             {
-                if (code != 200 || string.IsNullOrWhiteSpace(response))
+                if (state.CombinedItems.Count == 0)
                 {
-                    SetError($"HTTP {(code == 0 ? "0 (no response)" : code.ToString())} from endpoint.", reason, fireHook: true);
+                    var details = state.Errors.Count > 0 ? string.Join("; ", state.Errors) : "all sources returned empty data";
+                    SetError($"No data loaded from configured sources: {details}", state.Reason, fireHook: true);
                     return;
                 }
 
-                List<ItemEntry> parsed;
-                try
-                {
-                    parsed = JsonConvert.DeserializeObject<List<ItemEntry>>(response);
-                }
-                catch (Exception ex)
-                {
-                    SetError($"JSON parse failed: {ex.Message}", reason, fireHook: true);
-                    return;
-                }
+                ApplyNewData(state.CombinedItems, state.Reason);
 
-                if (parsed == null || parsed.Count == 0)
-                {
-                    SetError("Parsed item list was empty.", reason, fireHook: true);
-                    return;
-                }
-
-                ApplyNewData(parsed, response, reason);
+                if (state.Errors.Count > 0)
+                    PrintWarning($"ItemAPI: refresh completed with partial source failures: {string.Join("; ", state.Errors)}");
             }
             finally
             {
@@ -257,7 +403,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void ApplyNewData(List<ItemEntry> parsed, string rawJson, string reason)
+        private void ApplyNewData(List<ItemEntry> parsed, string reason)
         {
             // Normalize + de-dupe from one canonical list
             var byId = new Dictionary<int, ItemEntry>(parsed.Count);
@@ -267,7 +413,16 @@ namespace Oxide.Plugins
                 if (item == null) continue;
                 if (string.IsNullOrWhiteSpace(item.ShortName)) continue;
 
-                // If duplicate IDs exist, "last one wins"
+                if (byId.TryGetValue(item.Id, out var existing))
+                {
+                    if (string.IsNullOrWhiteSpace(existing.IconUrl) && !string.IsNullOrWhiteSpace(item.IconUrl))
+                        byId[item.Id] = item;
+                    else if (string.IsNullOrWhiteSpace(existing.DisplayName) && !string.IsNullOrWhiteSpace(item.DisplayName))
+                        byId[item.Id] = item;
+
+                    continue;
+                }
+
                 byId[item.Id] = item;
             }
 
@@ -282,23 +437,32 @@ namespace Oxide.Plugins
                     PrintWarning($"ItemAPI: shortName collision after ID de-duplication: '{trimmedShortName}' replaced id {existing.Id} with id {item.Id}.");
                 }
 
-                // If duplicate short names exist in cleaned list, "last one wins"
-                byShort[trimmedShortName] = item;
+                var merged = item;
+                if (existing != null)
+                {
+                    merged = MergeItem(existing, item);
+                    byId[merged.Id] = merged;
+                }
+
+                byShort[trimmedShortName] = merged;
             }
+
+            var normalized = byId.Values.ToList();
+            var normalizedRawJson = JsonConvert.SerializeObject(normalized);
 
             lock (_sync)
             {
-                _items = cleaned;
+                _items = normalized;
                 _byId = byId;
                 _byShortName = byShort;
-                _rawJson = rawJson;
+                _rawJson = normalizedRawJson;
                 _lastUpdatedUtc = DateTime.UtcNow;
                 _lastError = null;
             }
 
             if (_config.UseDiskCache)
             {
-                TryWriteDiskCache(rawJson);
+                TryWriteDiskCache(normalizedRawJson);
             }
 
             Puts($"ItemAPI: loaded {_items.Count:n0} items ({reason}).");
@@ -308,6 +472,21 @@ namespace Oxide.Plugins
             // Legacy compatibility hook retained for one version cycle.
             Interface.CallHook("OnItemApiUpdated", true, _items.Count, null, reason, DateTime.UtcNow.ToString("o"));
             Interface.CallHook("OnAdminItemListUpdated", true, _items.Count, null, reason, DateTime.UtcNow.ToString("o"));
+        }
+
+        private ItemEntry MergeItem(ItemEntry existing, ItemEntry incoming)
+        {
+            if (existing == null) return incoming;
+            if (incoming == null) return existing;
+
+            return new ItemEntry
+            {
+                Id = existing.Id,
+                ShortName = !string.IsNullOrWhiteSpace(existing.ShortName) ? existing.ShortName : incoming.ShortName,
+                DisplayName = !string.IsNullOrWhiteSpace(existing.DisplayName) ? existing.DisplayName : incoming.DisplayName,
+                Description = !string.IsNullOrWhiteSpace(existing.Description) ? existing.Description : incoming.Description,
+                IconUrl = !string.IsNullOrWhiteSpace(existing.IconUrl) ? existing.IconUrl : incoming.IconUrl
+            };
         }
 
         private void SetError(string error, string reason, bool fireHook)
@@ -343,7 +522,7 @@ namespace Oxide.Plugins
                 if (parsed == null || parsed.Count == 0)
                     return;
 
-                ApplyNewData(parsed, cache.RawJson, "cache");
+                ApplyNewData(parsed, "cache");
                 lock (_sync) _lastUpdatedUtc = cache.UpdatedUtc; // preserve cache timestamp
             }
             catch (Exception ex)
