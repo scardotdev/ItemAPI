@@ -2,131 +2,55 @@
 
 Author: **scar.dev**  
 Plugin: **ItemAPI**  
-Current plugin version: **1.1.1**
-
----
+Current plugin version: **1.2.0**
 
 ## Purpose
 
-`ItemAPI` is a shared service plugin for Rust servers running Oxide/uMod-compatible plugins (including Carbon-compatible environments). It downloads and caches Rust item metadata, then exposes a small API surface for other plugins to query by short name, by ID, or by search.
+`ItemAPI` is a shared service plugin for Rust servers that provides normalized item metadata to other plugins.
 
-Use this document when building another plugin that **depends on ItemAPI** for item metadata.
+It fetches item JSON from configured endpoints, normalizes/merges it, caches it, and exposes safe plugin-call methods for lookup/search/access.
 
----
+## Quick Start
 
-## Quick Start (for other plugin authors)
+1. Ensure `plugins/ItemAPI.cs` is loaded before your plugin performs lookups.
+2. Resolve the plugin with `plugins.Find("ItemAPI")`.
+3. Null-check plugin references and defensively cast all `Plugin.Call` results.
+4. Expect startup windows where `IsReady()` is `false`.
+5. Optionally consume update hooks to refresh your plugin-side cache.
 
-1. Ensure `plugins/ItemAPI.cs` is installed and loaded before your plugin attempts lookups.
-2. Resolve `ItemAPI` by name with `plugins.Find("ItemAPI")`.
-3. Guard every API call with null checks and safe casts.
-4. Expect temporary startup periods where `IsReady()` is false.
-5. Optionally listen for update hooks to rehydrate your own plugin cache when item data changes.
+## API Surface (`Plugin.Call`)
 
----
+- `IsReady()` → `bool`
+- `GetItemCount()` → `int`
+- `GetLastUpdatedUtcIso()` → `string | null`
+- `GetRawJson()` → `string | null`
+- `GetItemByShortName(string shortName)` → `Dictionary<string, object> | null`
+- `GetItemById(int id)` → `Dictionary<string, object> | null`
+- `FindItems(string query, int maxResults = 25)` → `List<Dictionary<string, object>>`
+- `GetAllItems(int skip = 0, int take = 0)` → `List<Dictionary<string, object>>`
+- `RequestRefresh(string reason = "api")` → `bool` (`false` when a fetch is already in progress)
 
-## Dependency & Availability Pattern
+Behavior notes:
 
-Use this defensive pattern in your plugin:
+- `GetItemByShortName` trims input and uses case-insensitive matching.
+- `FindItems` matches on `shortName` and `displayName` with case-insensitive substring logic.
+- `FindItems` returns empty list for blank query and coerces `maxResults <= 0` to `25`.
+- `GetAllItems` sorts by `shortName` case-insensitively.
+- `GetAllItems` coerces negative `skip`/`take` to `0`; `take = 0` means unlimited after skip.
 
-```csharp
-private Plugin _itemApi;
+## DTO Contract
 
-private void OnServerInitialized()
-{
-    _itemApi = plugins.Find("ItemAPI");
-
-    if (_itemApi == null)
-    {
-        PrintWarning("ItemAPI not found. Features depending on item metadata are disabled.");
-        return;
-    }
-
-    var ready = (bool?)_itemApi.Call("IsReady") ?? false;
-    if (!ready)
-    {
-        Puts("ItemAPI found but not ready yet; waiting for first successful data load.");
-    }
-}
-```
-
-Recommended fallback behavior:
-
-- If `ItemAPI` is missing: disable only dependent features, not your whole plugin.
-- If `ItemAPI` is present but not ready: retry later or defer the operation.
-
----
-
-## Public API Methods (Plugin.Call)
-
-All methods below are invoked on the `Plugin` instance returned by `plugins.Find("ItemAPI")`.
-
-### `IsReady()`
-
-- **Call:** `itemApi.Call("IsReady")`
-- **Returns:** `bool`
-- **Use for:** readiness gate before expensive / user-facing metadata operations.
-
-### `GetItemCount()`
-
-- **Call:** `itemApi.Call("GetItemCount")`
-- **Returns:** `int`
-- **Use for:** diagnostics, health checks, or telemetry.
-
-### `GetLastUpdatedUtcIso()`
-
-- **Call:** `itemApi.Call("GetLastUpdatedUtcIso")`
-- **Returns:** `string` (ISO-8601) or `null`
-- **Use for:** displaying staleness age or logging.
-
-### `GetRawJson()`
-
-- **Call:** `itemApi.Call("GetRawJson")`
-- **Returns:** `string` raw JSON or `null`
-- **Use for:** advanced/custom parsing workflows (prefer DTO APIs first).
-
-### `GetItemByShortName(string shortName)`
-
-- **Call:** `itemApi.Call("GetItemByShortName", "rifle.ak")`
-- **Returns:** `Dictionary<string, object>` or `null`
-- **Behavior:** trims input and uses case-insensitive short-name matching.
-
-### `GetItemById(int id)`
-
-- **Call:** `itemApi.Call("GetItemById", -1461508848)`
-- **Returns:** `Dictionary<string, object>` or `null`
-
-### `FindItems(string query, int maxResults = 25)`
-
-- **Call:** `itemApi.Call("FindItems", "med", 10)`
-- **Returns:** `List<Dictionary<string, object>>`
-- **Behavior:** case-insensitive substring match on `shortName` and `displayName`.
-
-### `GetAllItems(int skip = 0, int take = 0)`
-
-- **Call:** `itemApi.Call("GetAllItems", 0, 100)`
-- **Returns:** `List<Dictionary<string, object>>`
-- **Behavior:** sorted by short name, supports paging.
-
-### `RequestRefresh(string reason = "api")`
-
-- **Call:** `itemApi.Call("RequestRefresh", "myplugin-manual")`
-- **Returns:** `bool`
-  - `true` = accepted
-  - `false` = already fetching
-
----
-
-## DTO Contract (returned item object)
-
-For lookup/search/list methods, each item dictionary uses these keys:
+Returned dictionaries include:
 
 - `shortName` (`string`)
 - `id` (`int`)
 - `displayName` (`string`)
 - `description` (`string`)
 - `iconUrl` (`string`)
+- `rarity` (`string`)
+- `category` (`string`)
 
-Helper parser:
+Example parser:
 
 ```csharp
 private bool TryReadItem(Dictionary<string, object> row, out string shortName, out int id, out string displayName)
@@ -153,109 +77,60 @@ private bool TryReadItem(Dictionary<string, object> row, out string shortName, o
 }
 ```
 
----
+## Refresh + Hook Semantics
 
-## Cross-Plugin Update Hooks You Can Implement
+ItemAPI may refresh via startup timer, periodic timer, console command, or API call.
 
-`ItemAPI` emits these hooks after refresh attempts:
+After each refresh attempt, it emits:
 
 ```csharp
 private void OnItemApiUpdated(bool success, int count, string error, string reason, string updatedUtcIso)
 {
-    // Your plugin receives update results here.
+    // Primary hook.
 }
 
 private void OnAdminItemListUpdated(bool success, int count, string error, string reason, string updatedUtcIso)
 {
-    // Legacy compatibility alias (still emitted for one version cycle).
+    // Legacy compatibility hook alias.
 }
 ```
 
-Practical use cases:
+Use these hooks to rehydrate your own caches and log failures without hard-crashing dependent features.
 
-- Rebuild your own item cache when `success == true`.
-- Degrade gracefully (without hard failure) when `success == false`.
-- Log `reason` to differentiate startup, interval, manual, cache, or API-triggered refresh paths.
+## Merge Behavior (Important for Consumers)
 
----
+Normalization pipeline in `ItemAPI`:
 
-## End-to-End Example (Safe Integration)
+1. Discards rows with blank `shortName`.
+2. Deduplicates by `id`.
+   - First usable item for an ID is retained.
+   - Later duplicate ID can replace only when it improves missing `iconUrl` or missing `displayName`.
+3. Rebuilds short-name index (trimmed, case-insensitive).
+4. Logs short-name collisions and merges colliding records field-by-field, preferring already-populated values.
 
-```csharp
-private Plugin _itemApi;
+Implication: for duplicate IDs and short names, results are deterministic but not strictly "last writer wins".
 
-private void OnServerInitialized()
+## Configuration Defaults (from `configs/ItemAPI.json`)
+
+```json
 {
-    _itemApi = plugins.Find("ItemAPI");
-}
-
-private bool TryResolveItemByShortName(string shortName, out int id, out string displayName)
-{
-    id = 0;
-    displayName = string.Empty;
-
-    if (_itemApi == null)
-        _itemApi = plugins.Find("ItemAPI");
-
-    if (_itemApi == null)
-        return false;
-
-    var isReady = (bool?)_itemApi.Call("IsReady") ?? false;
-    if (!isReady)
-        return false;
-
-    var row = _itemApi.Call("GetItemByShortName", shortName) as Dictionary<string, object>;
-    if (row == null)
-        return false;
-
-    if (!row.TryGetValue("id", out var idObj))
-        return false;
-
-    if (idObj is long l) id = (int)l;
-    else if (idObj is int i) id = i;
-    else if (!int.TryParse(idObj?.ToString(), out id))
-        return false;
-
-    row.TryGetValue("displayName", out var dnObj);
-    displayName = dnObj?.ToString() ?? shortName;
-
-    return true;
+  "PrimaryEndpointUrl": "https://rusthelp.com/downloads/admin-item-list-public.json",
+  "SecondaryEndpointUrl": "https://api.carbonmod.gg/meta/rust/items.json",
+  "EnableSecondarySource": true,
+  "RefreshIntervalMinutes": 1440,
+  "StartupFetchDelaySeconds": 5,
+  "RequestTimeoutSeconds": 10,
+  "UseDiskCache": true,
+  "DiskCacheFileName": "ItemAPI.cache"
 }
 ```
 
----
+## Console Commands (Server Console Only)
 
-## Best Practices for Plugin Authors
+- `itemapi.refresh`
+- `itemapi.status`
 
-- Prefer `GetItemByShortName` or `GetItemById` for targeted lookups.
-- Use `FindItems` for user-driven fuzzy searches.
-- Avoid calling `GetAllItems` repeatedly in hot paths; cache results in your plugin when needed.
-- Never assume `ItemAPI` is always loaded or ready.
-- Treat all plugin-call return values as untrusted dynamic objects; validate and cast defensively.
-- If you call `RequestRefresh`, avoid spamming; it can return `false` while a fetch is already in progress.
+Legacy aliases (still registered):
 
----
-
-## Troubleshooting Checklist
-
-If your integration is not working:
-
-1. Confirm ItemAPI is loaded (`o.plugins` / plugin list command in your framework).
-2. Confirm readiness via `IsReady()`.
-3. Check server logs for ItemAPI warnings (endpoint issues, parse failures, empty payload).
-4. Verify your key names match DTO contract exactly (`shortName`, `id`, `displayName`, `description`, `iconUrl`).
-5. Verify your casts handle both `int` and `long` numeric representations.
-
----
-
-## Support Notes
-
-When requesting support, include:
-
-- Your plugin name and version.
-- ItemAPI version.
-- The exact API method and argument(s) you called.
-- Any relevant console/log output.
-- Whether issue occurs at startup only or persists during runtime.
-
-This helps isolate whether the issue is dependency loading, readiness timing, data contract handling, or endpoint refresh state.
+- `adminitemlist.refresh`
+- `adminitemlist.status`
