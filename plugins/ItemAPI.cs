@@ -37,6 +37,8 @@ namespace Oxide.Plugins
             [JsonProperty("displayName")] public string DisplayName { get; set; }
             [JsonProperty("description")] public string Description { get; set; }
             [JsonProperty("iconUrl")] public string IconUrl { get; set; }
+            [JsonProperty("rarity")] public string Rarity { get; set; }
+            [JsonProperty("category")] public string Category { get; set; }
         }
 
         private class CacheModel
@@ -330,6 +332,8 @@ namespace Oxide.Plugins
                 var displayName = ReadString(obj, "displayName", "DisplayName");
                 var description = ReadString(obj, "description", "Description");
                 var iconUrl = ReadString(obj, "iconUrl", "IconUrl");
+                var rarity = ReadString(obj, "rarity", "Rarity");
+                var category = ReadString(obj, "category", "Category");
 
                 int id;
                 if (!TryReadInt(obj, out id, "id", "Id"))
@@ -341,7 +345,9 @@ namespace Oxide.Plugins
                     Id = id,
                     DisplayName = displayName,
                     Description = description,
-                    IconUrl = iconUrl
+                    IconUrl = iconUrl,
+                    Rarity = rarity,
+                    Category = category
                 });
             }
 
@@ -485,7 +491,9 @@ namespace Oxide.Plugins
                 ShortName = !string.IsNullOrWhiteSpace(existing.ShortName) ? existing.ShortName : incoming.ShortName,
                 DisplayName = !string.IsNullOrWhiteSpace(existing.DisplayName) ? existing.DisplayName : incoming.DisplayName,
                 Description = !string.IsNullOrWhiteSpace(existing.Description) ? existing.Description : incoming.Description,
-                IconUrl = !string.IsNullOrWhiteSpace(existing.IconUrl) ? existing.IconUrl : incoming.IconUrl
+                IconUrl = !string.IsNullOrWhiteSpace(existing.IconUrl) ? existing.IconUrl : incoming.IconUrl,
+                Rarity = !string.IsNullOrWhiteSpace(existing.Rarity) ? existing.Rarity : incoming.Rarity,
+                Category = !string.IsNullOrWhiteSpace(existing.Category) ? existing.Category : incoming.Category
             };
         }
 
@@ -655,7 +663,9 @@ namespace Oxide.Plugins
                 ["id"] = item.Id,
                 ["displayName"] = item.DisplayName,
                 ["description"] = item.Description,
-                ["iconUrl"] = item.IconUrl
+                ["iconUrl"] = item.IconUrl,
+                ["rarity"] = item.Rarity,
+                ["category"] = item.Category
             };
         }
 
