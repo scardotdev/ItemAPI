@@ -8,7 +8,7 @@ using Oxide.Core.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("ItemAPI", "scar.dev", "1.2.0")]
+    [Info("ItemAPI", "scar.dev", "1.2.1")]
     [Description("ItemAPI downloads and merges Rust item list JSON from RustHelp + Carbon and exposes it via a simple API for other plugins.")]
     public class ItemAPI : RustPlugin
     {
@@ -421,11 +421,7 @@ namespace Oxide.Plugins
 
                 if (byId.TryGetValue(item.Id, out var existing))
                 {
-                    if (string.IsNullOrWhiteSpace(existing.IconUrl) && !string.IsNullOrWhiteSpace(item.IconUrl))
-                        byId[item.Id] = item;
-                    else if (string.IsNullOrWhiteSpace(existing.DisplayName) && !string.IsNullOrWhiteSpace(item.DisplayName))
-                        byId[item.Id] = item;
-
+                    byId[item.Id] = MergeItem(existing, item);
                     continue;
                 }
 
