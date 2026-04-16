@@ -8,7 +8,7 @@ using Oxide.Core.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("ItemAPI", "scar.dev", "1.2.1")]
+    [Info("ItemAPI", "scar.dev", "1.2.2")]
     [Description("ItemAPI downloads and merges Rust item list JSON from RustHelp + Carbon and exposes it via a simple API for other plugins.")]
     public class ItemAPI : RustPlugin
     {
@@ -190,6 +190,32 @@ namespace Oxide.Plugins
                 $"- LastUpdatedUtc: {(updated.HasValue ? updated.Value.ToString("o") : "null")}\n" +
                 $"- LastError: {(string.IsNullOrEmpty(lastErr) ? "none" : lastErr)}"
             );
+        }
+
+        [ConsoleCommand("itemapi.lookup")]
+        private void CmdLookup(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null)
+            {
+                arg.ReplyWith("This is a server console command.");
+                return;
+            }
+
+            if (arg.Args == null || arg.Args.Length < 1 || string.IsNullOrWhiteSpace(arg.Args[0]))
+            {
+                arg.ReplyWith("Usage: itemapi.lookup <shortName>");
+                return;
+            }
+
+            var shortName = arg.Args[0].Trim();
+            var dto = GetItemByShortName(shortName);
+            if (dto == null)
+            {
+                arg.ReplyWith($"ItemAPI: no item found for shortName '{shortName}'.");
+                return;
+            }
+
+            arg.ReplyWith($"ItemAPI lookup for '{shortName}': {JsonConvert.SerializeObject(dto)}");
         }
 
         #endregion

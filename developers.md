@@ -2,7 +2,7 @@
 
 Author: **scar.dev**  
 Plugin: **ItemAPI**  
-Current plugin version: **1.2.0**
+Current plugin version: **1.2.2**
 
 ## Purpose
 
@@ -129,6 +129,7 @@ Implication: for duplicate IDs and short names, results are deterministic but no
 
 - `itemapi.refresh`
 - `itemapi.status`
+- `itemapi.lookup <shortName>`
 
 Legacy aliases (still registered):
 
