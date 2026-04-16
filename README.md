@@ -12,7 +12,7 @@ Framework target: **Oxide/uMod and Carbon-compatible Rust server plugins**
 
 - Name: `ItemAPI`
 - Author: `scar.dev`
-- Version: `1.2.0`
+- Version: `1.2.2`
 - Description: `ItemAPI downloads and merges Rust item list JSON from RustHelp + Carbon and exposes it via a simple API for other plugins.`
 
 ## Data sources
@@ -112,6 +112,7 @@ Server-console-only commands:
 
 - `itemapi.refresh` → requests refresh (`reason = "manual"`).
 - `itemapi.status` → prints readiness, item count, fetching flag, `LastUpdatedUtc`, and `LastError`.
+- `itemapi.lookup <shortName>` → prints matching item details as JSON (or a not-found message).
 
 Legacy aliases (for one version cycle):
 
