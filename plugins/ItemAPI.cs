@@ -8,7 +8,7 @@ using Oxide.Core.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("ItemAPI", "scar.dev", "1.2.2")]
+    [Info("ItemAPI", "scar.dev", "1.2.3")]
     [Description("ItemAPI downloads and merges Rust item list JSON from RustHelp + Carbon and exposes it via a simple API for other plugins.")]
     public class ItemAPI : RustPlugin
     {
@@ -201,13 +201,19 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (arg.Args == null || arg.Args.Length < 1 || string.IsNullOrWhiteSpace(arg.Args[0]))
+            if (arg.Args == null || arg.Args.Length < 1)
             {
                 arg.ReplyWith("Usage: itemapi.lookup <shortName>");
                 return;
             }
 
-            var shortName = arg.Args[0].Trim();
+            var shortName = arg.Args[0].ToString().Trim();
+            if (string.IsNullOrWhiteSpace(shortName))
+            {
+                arg.ReplyWith("Usage: itemapi.lookup <shortName>");
+                return;
+            }
+
             var dto = GetItemByShortName(shortName);
             if (dto == null)
             {
