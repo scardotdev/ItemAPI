@@ -12,7 +12,7 @@ Framework target: **Oxide/uMod and Carbon-compatible Rust server plugins**
 
 - Name: `ItemAPI`
 - Author: `scar.dev`
-- Version: `1.2.2`
+- Version: `1.2.3`
 - Description: `ItemAPI downloads and merges Rust item list JSON from RustHelp + Carbon and exposes it via a simple API for other plugins.`
 
 ## Data sources

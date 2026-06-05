@@ -2,7 +2,7 @@
 
 Author: **scar.dev**  
 Plugin: **ItemAPI**  
-Current plugin version: **1.2.2**
+Current plugin version: **1.2.3**
 
 ## Purpose
 
