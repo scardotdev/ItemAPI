@@ -1,0 +1,40 @@
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+
+# C# build and tooling output
+[Bb]in/
+[Oo]bj/
+.vs/
+TestResults/
+*.nupkg
+
+# Server runtime output and sensitive local configuration
+logs/
+oxide/logs/
+oxide/data/
+oxide/config/
+carbon/logs/
+carbon/data/
+carbon/configs/
+server/*/
+*.log
+
+# ItemAPI generated cache
+ItemAPI.cache
+ItemAPI.cache.json
+**/ItemAPI.cache
+**/ItemAPI.cache.json
+
+# Local environment and temporary files
+.env
+.env.*
+!.env.example
+*.tmp
+*.bak
+*~

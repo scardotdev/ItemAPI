@@ -1,0 +1,82 @@
+name: Bug report
+description: Report a reproducible ItemAPI problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Search existing issues first. For a security vulnerability, stop and follow SECURITY.md instead of filing this public report.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: ItemAPI version
+      description: Find this in the plugin metadata or server load output.
+      placeholder: "1.2.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Server framework
+      options:
+        - Oxide/uMod
+        - Carbon
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Framework and Rust server versions
+      placeholder: "Carbon build ..., Rust server build ..."
+    validations:
+      required: true
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Relevant configuration
+      description: Paste relevant ItemAPI settings. Remove credentials, tokens, addresses, and personal data.
+      render: json
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Configure ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Remove credentials, tokens, addresses, and personal data.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched for an existing issue and tested with the latest release.
+          required: true
+        - label: This report does not disclose a security vulnerability or sensitive data.
+          required: true
