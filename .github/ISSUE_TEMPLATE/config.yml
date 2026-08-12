@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/scardotdev/ItemAPI/security/advisories/new
+    about: Report suspected vulnerabilities privately; do not create a public issue.
+  - name: Usage and integration documentation
+    url: https://github.com/scardotdev/ItemAPI/blob/main/developers.md
+    about: Review the integration guide before opening a report.

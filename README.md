@@ -8,6 +8,28 @@ Framework target: **Oxide/uMod and Carbon-compatible Rust server plugins**
 
 `ItemAPI` downloads Rust item metadata from RustHelp and (optionally) Carbon, merges it into a normalized in-memory index, caches the normalized payload, and exposes lookup/search APIs for other plugins.
 
+## Installation
+
+1. Install a current Rust dedicated server with Oxide/uMod or Carbon.
+2. Copy `plugins/ItemAPI.cs` into the framework's plugins directory.
+3. Optionally copy the settings from `configs/ItemAPI.json` into the generated
+   ItemAPI configuration and adjust the endpoints or refresh behavior.
+4. Load or reload the plugin, then run `itemapi.status` in the **server console**.
+5. After the startup fetch, use `itemapi.lookup <shortName>` to verify a lookup.
+
+The server must be able to make HTTPS requests to each enabled data endpoint.
+ItemAPI needs no credentials for its default endpoints. The cache is generated
+in the framework's data storage and should not be committed to source control.
+
+## Compatibility and releases
+
+ItemAPI targets both Oxide/uMod and Carbon on Rust dedicated servers. Because
+framework and game updates can affect plugin compatibility, use the latest
+ItemAPI release and include exact framework and server versions in bug reports.
+The public API, hook, configuration, and normalization contracts documented
+below describe version `1.2.3`. See [`CHANGELOG.md`](CHANGELOG.md) for release
+history and upgrade-relevant changes.
+
 ## Plugin metadata
 
 - Name: `ItemAPI`
@@ -163,3 +185,26 @@ Behavior details:
 void OnItemApiUpdated(bool success, int count, string error, string reason, string updatedUtcIso)
 void OnAdminItemListUpdated(bool success, int count, string error, string reason, string updatedUtcIso) // legacy alias
 ```
+
+## Community and support
+
+- Read [`developers.md`](developers.md) for dependent-plugin integration examples.
+- Use the structured GitHub issue forms for reproducible bugs and focused feature
+  proposals. Include ItemAPI, framework, and Rust server versions plus sanitized
+  configuration, reproduction steps, and logs.
+- Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before proposing or implementing a
+  change, and follow the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) in project
+  spaces.
+- Do not publicly disclose vulnerabilities. Follow [`SECURITY.md`](SECURITY.md)
+  to use the repository's private reporting route.
+
+The issue tracker is intended for actionable bug reports and feature proposals;
+the README and developer guide are the first stop for setup and API questions.
+
+## License
+
+ItemAPI is distributed under the GNU General Public License version 3. See
+[`LICENSE`](LICENSE) for the complete terms. If you distribute a modified version
+or a work governed by the GPL, you must preserve applicable notices, provide the
+corresponding source as required, and license the covered derivative work under
+GPL-compatible terms. This summary is not legal advice; the license text controls.

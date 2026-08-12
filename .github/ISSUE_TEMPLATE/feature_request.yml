@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a focused improvement to ItemAPI
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Explain the user or dependent-plugin need rather than only the desired implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: API, configuration, and compatibility impact
+      description: Describe effects on Oxide/uMod, Carbon, hooks, DTOs, caches, and existing configuration.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and pull requests for this proposal.
+          required: true
+        - label: I am willing to help implement or validate this change.
+          required: false
